@@ -217,7 +217,11 @@ function supabaseApi() {
     sb,
     async user() { return (await sb.auth.getUser()).data.user; },
     async signIn(e, p) { return must(await sb.auth.signInWithPassword({ email: e, password: p })); },
-    async signUp(e, p) { return must(await sb.auth.signUp({ email: e, password: p })); },
+    async signUp(e, p) {
+      // send the confirmation link back to this dashboard, not Supabase's default localhost:3000
+      const back = location.origin + location.pathname;
+      return must(await sb.auth.signUp({ email: e, password: p, options: { emailRedirectTo: back } }));
+    },
     async signOut() { await sb.auth.signOut(); },
     async list() { return must(await sb.from('links').select('*').order('created_at', { ascending: false })); },
     async overview(days) { const rows = must(await sb.rpc('links_overview', { p_days: days })); return Object.fromEntries(rows.map(r => [r.link_id, r])); },
