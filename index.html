@@ -559,7 +559,10 @@ async function boot() {
 }
 const authAct = (fn) => async () => {
   $('aErr').textContent = '';
-  try { await fn($('aEmail').value.trim(), $('aPass').value); await boot(); }
+  const email = $('aEmail').value.trim(), pass = $('aPass').value;
+  if (!/^\S+@\S+\.\S+$/.test(email)) { $('aErr').textContent = 'Enter your email address.'; return; }
+  if (pass.length < 6) { $('aErr').textContent = 'Password must be at least 6 characters.'; return; }
+  try { await fn(email, pass); await boot(); }
   catch (e) { $('aErr').textContent = e.message; }
 };
 if (!DEMO) {
