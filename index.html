@@ -1,0 +1,574 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Dynalink — Smart links</title>
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<style>
+:root{
+  --bg:#f5f6f8;--card:#fff;--ink:#141821;--ink2:#424a5c;--muted:#6b7385;--line:#e3e6ec;--line2:#eef0f4;
+  --accent:#2f5bea;--accent-ink:#fff;--accent-soft:#eaf0ff;--ok:#1a7f4b;--ok-soft:#e6f5ec;--bad:#b42318;--bad-soft:#fdecea;
+  --r:14px;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+button,input,textarea,select{font:inherit;color:inherit}
+a{color:var(--accent)}
+[hidden]{display:none!important}
+
+/* top bar */
+.top{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:12px;padding:12px 20px;background:rgba(255,255,255,.92);
+     backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px;letter-spacing:-.01em}
+.logo i{width:26px;height:26px;border-radius:8px;background:var(--accent);display:grid;place-items:center;color:#fff;font-style:normal;font-size:14px}
+.badge{font-size:11px;font-weight:600;padding:3px 8px;border-radius:99px;background:#fff4dd;color:#8a5a00;border:1px solid #f3dfb2}
+.sp{flex:1}
+.who{color:var(--muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px}
+
+.btn{border:1px solid var(--line);background:var(--card);padding:8px 13px;border-radius:10px;cursor:pointer;font-weight:550;white-space:nowrap;
+     display:inline-flex;align-items:center;gap:6px;text-decoration:none;color:var(--ink)}
+.btn:hover{border-color:#cfd4de}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.danger{color:var(--bad)}
+.btn.sm{padding:5px 9px;font-size:12.5px;border-radius:8px}
+.btn:disabled{opacity:.5;cursor:default}
+
+/* layout */
+.app{display:grid;grid-template-columns:380px 1fr;min-height:calc(100vh - 55px)}
+.list{border-right:1px solid var(--line);background:var(--card);display:flex;flex-direction:column;min-height:0}
+.list-head{padding:14px 16px;display:flex;gap:8px;border-bottom:1px solid var(--line2)}
+.search{flex:1;border:1px solid var(--line);border-radius:10px;padding:8px 11px;background:var(--bg)}
+.items{overflow:auto;flex:1}
+.item{padding:13px 16px;border-bottom:1px solid var(--line2);cursor:pointer;display:grid;grid-template-columns:1fr auto;gap:2px 10px}
+.item:hover{background:#fafbfc}
+.item.sel{background:var(--accent-soft)}
+.item .t{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .s{font-family:var(--mono);font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .n{text-align:right;font-weight:650;font-variant-numeric:tabular-nums}
+.item .nl{text-align:right;font-size:11px;color:var(--muted)}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:1px;background:var(--ok)}
+.dot.off{background:#c3c8d2}
+.empty{padding:40px 24px;text-align:center;color:var(--muted)}
+
+.detail{padding:24px 28px 60px;min-width:0}
+.dhead{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+.dhead h2{margin:0;font-size:22px;letter-spacing:-.01em}
+.shortrow{display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap}
+.shorturl{font-family:var(--mono);font-size:13px;background:var(--card);border:1px solid var(--line);padding:5px 9px;border-radius:8px;word-break:break-all}
+.tag{font-size:11.5px;padding:2px 8px;border-radius:99px;background:var(--line2);color:var(--ink2)}
+.back{display:none}
+
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;min-width:0}
+.card h3{margin:0 0 12px;font-size:13px;font-weight:650;color:var(--ink2)}
+.c3{grid-column:span 3}.c4{grid-column:span 4}.c6{grid-column:span 6}.c8{grid-column:span 8}.c12{grid-column:span 12}
+.kpi .v{font-size:26px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.kpi .l{color:var(--muted);font-size:12.5px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--card)}
+.seg button{border:0;background:none;padding:6px 11px;cursor:pointer;font-weight:550;color:var(--muted)}
+.seg button.on{background:var(--ink);color:#fff}
+
+/* charts */
+.chart{position:relative}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:#fff;font-size:12px;padding:6px 9px;border-radius:8px;
+     white-space:nowrap;transform:translate(-50%,-110%);opacity:0;transition:opacity .08s}
+.bars{display:flex;flex-direction:column;gap:9px}
+.bar{display:grid;grid-template-columns:minmax(70px,120px) 1fr 44px;gap:10px;align-items:center;font-size:13px}
+.bar .k{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink2)}
+.bar .track{height:8px;background:var(--line2);border-radius:4px;overflow:hidden}
+.bar .fill{height:100%;background:var(--accent);border-radius:4px}
+.bar .n{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.nodata{color:var(--muted);font-size:13px;padding:6px 0}
+
+/* routing table */
+.route{display:grid;grid-template-columns:88px 1fr;gap:8px 12px;font-size:13px}
+.route .p{font-weight:650}
+.route .d{color:var(--ink2);word-break:break-all}
+.route .d code{font-family:var(--mono);font-size:12px;background:var(--line2);padding:1px 5px;border-radius:5px}
+
+.qrwrap{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.qr{width:150px;height:150px;border:1px solid var(--line);border-radius:12px;padding:10px;background:#fff}
+.qr svg{width:100%;height:100%}
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+.field label{font-size:12.5px;font-weight:600;color:var(--ink2)}
+.field .h{font-size:11.5px;color:var(--muted)}
+.inp{border:1px solid var(--line);border-radius:10px;padding:9px 11px;background:#fff;width:100%}
+.inp:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+textarea.inp{min-height:64px;resize:vertical}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+.out{font-family:var(--mono);font-size:12px;background:var(--line2);padding:9px 10px;border-radius:9px;word-break:break-all}
+
+/* modal */
+.modal{position:fixed;inset:0;background:rgba(15,18,25,.45);z-index:20;display:flex;justify-content:flex-end}
+.sheet{background:var(--bg);width:min(640px,100%);height:100%;display:flex;flex-direction:column;box-shadow:-12px 0 40px rgba(0,0,0,.15)}
+.sheet-head{display:flex;align-items:center;gap:10px;padding:16px 20px;background:var(--card);border-bottom:1px solid var(--line)}
+.sheet-head h2{margin:0;font-size:17px;flex:1}
+.sheet-body{overflow:auto;padding:18px 20px 30px;flex:1}
+.sheet-foot{display:flex;gap:8px;padding:12px 20px;background:var(--card);border-top:1px solid var(--line)}
+fieldset{border:1px solid var(--line);background:var(--card);border-radius:var(--r);padding:14px 16px 4px;margin:0 0 14px}
+legend{font-weight:700;font-size:13px;padding:0 6px}
+.chk{display:flex;gap:9px;align-items:flex-start;margin-bottom:12px;cursor:pointer}
+.chk input{margin-top:3px;accent-color:var(--accent)}
+.chk small{display:block;color:var(--muted)}
+.err{color:var(--bad);font-size:13px}
+
+/* auth */
+.auth{max-width:380px;margin:9vh auto;padding:0 20px}
+.auth .card{padding:26px}
+.auth h1{font-size:22px;margin:0 0 4px}
+
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:10px;
+       font-weight:550;z-index:50;opacity:0;transition:opacity .15s;pointer-events:none}
+.toast.on{opacity:1}
+
+@media (max-width:900px){
+  .app{grid-template-columns:1fr}
+  .app.has-sel .list{display:none}
+  .app:not(.has-sel) .detail{display:none}
+  .back{display:inline-flex}
+  .detail{padding:16px 14px 60px}
+  .c3{grid-column:span 6}.c4,.c6,.c8{grid-column:span 12}
+  .who{display:none}
+  .row2{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="logo"><i>↗</i><span id="brand">Dynalink</span></div>
+  <span class="badge" id="demoBadge" hidden>Demo mode</span>
+  <div class="sp"></div>
+  <span class="who" id="who"></span>
+  <button class="btn sm" id="signOut" hidden>Sign out</button>
+</header>
+
+<!-- AUTH -->
+<section class="auth" id="authView" hidden>
+  <div class="card">
+    <h1>Sign in</h1>
+    <p style="color:var(--muted);margin:0 0 18px">Manage your smart links.</p>
+    <div class="field"><label>Email</label><input class="inp" id="aEmail" type="email" autocomplete="email"></div>
+    <div class="field"><label>Password</label><input class="inp" id="aPass" type="password" autocomplete="current-password"></div>
+    <div class="err" id="aErr"></div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn primary" id="aIn">Sign in</button>
+      <button class="btn" id="aUp">Create account</button>
+    </div>
+  </div>
+</section>
+
+<!-- APP -->
+<section class="app" id="appView" hidden>
+  <aside class="list">
+    <div class="list-head">
+      <input class="search" id="q" placeholder="Search links…">
+      <button class="btn primary" id="newBtn">+ New</button>
+    </div>
+    <div class="items" id="items"></div>
+  </aside>
+  <main class="detail" id="detail"></main>
+</section>
+
+<!-- EDITOR -->
+<div class="modal" id="modal" hidden>
+  <div class="sheet">
+    <div class="sheet-head"><h2 id="mTitle">New link</h2><button class="btn sm" id="mClose">Close</button></div>
+    <div class="sheet-body"><form id="form" autocomplete="off"></form></div>
+    <div class="sheet-foot">
+      <button class="btn primary" id="mSave">Save link</button>
+      <span class="err" id="mErr" style="align-self:center"></span>
+      <div class="sp"></div>
+      <button class="btn danger" id="mDel" hidden>Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+const CFG = window.DL_CONFIG || {};
+const DEMO = !CFG.SUPABASE_URL;
+const SHORT = (CFG.SHORT_BASE || (CFG.SUPABASE_URL ? CFG.SUPABASE_URL.replace(/\/$/,'') + '/functions/v1/go' : 'https://go.yourbrand.com')).replace(/\/$/, '');
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt = (n) => Number(n || 0).toLocaleString();
+const shortUrl = (l) => `${SHORT}/${l.slug}`;
+if (CFG.BRAND) { $('brand').textContent = CFG.BRAND; document.title = CFG.BRAND + ' — Smart links'; }
+
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 1600); }
+async function copy(text) { try { await navigator.clipboard.writeText(text); toast('Copied'); } catch { prompt('Copy:', text); } }
+function randomSlug(n = 6) { const a = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s = ''; const r = crypto.getRandomValues(new Uint8Array(n)); for (const x of r) s += a[x % a.length]; return s; }
+
+/* ───────────── DATA LAYER ───────────── */
+const FIELDS = ['slug','title','active','expires_at','app_name','app_icon_url','android_package','ios_app_id','ios_store_url','android_store_url',
+  'ios_deep_link','android_deep_link','desktop_url','fallback_url','pass_params','try_app_first','og_title','og_description','og_image','tags'];
+function clean(l) { const o = {}; for (const f of FIELDS) { let v = l[f]; if (typeof v === 'string') v = v.trim(); o[f] = v === '' ? null : v; } o.tags = l.tags || []; o.title = o.title || ''; return o; }
+
+function supabaseApi() {
+  const sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY);
+  const must = ({ data, error }) => { if (error) throw new Error(error.message); return data; };
+  return {
+    sb,
+    async user() { return (await sb.auth.getUser()).data.user; },
+    async signIn(e, p) { return must(await sb.auth.signInWithPassword({ email: e, password: p })); },
+    async signUp(e, p) { return must(await sb.auth.signUp({ email: e, password: p })); },
+    async signOut() { await sb.auth.signOut(); },
+    async list() { return must(await sb.from('links').select('*').order('created_at', { ascending: false })); },
+    async overview(days) { const rows = must(await sb.rpc('links_overview', { p_days: days })); return Object.fromEntries(rows.map(r => [r.link_id, r])); },
+    async save(l) {
+      const row = clean(l);
+      if (l.id) return must(await sb.from('links').update(row).eq('id', l.id).select().single());
+      return must(await sb.from('links').insert(row).select().single());
+    },
+    async remove(id) { must(await sb.from('links').delete().eq('id', id)); },
+    async stats(id, days) { return must(await sb.rpc('link_stats', { p_link: id, p_days: days })); },
+  };
+}
+
+function demoApi() {
+  const now = Date.now();
+  let links = [
+    { id:'d1', slug:'dashain', title:'Dashain ticket offer', active:true, app_name:'mBank', app_icon_url:'', android_package:'com.example.mbank', ios_app_id:'1234567890',
+      ios_deep_link:'mbank://offers/dashain', android_deep_link:'mbank://offers/dashain', desktop_url:'', fallback_url:'https://example.com/dashain',
+      pass_params:true, try_app_first:true, og_title:'Book Dashain bus tickets in the app', og_description:'Cashback on every ticket this festive season.', og_image:'', tags:['campaign','festival'], created_at:new Date(now-86400e3*20).toISOString() },
+    { id:'d2', slug:'get', title:'App download — bio link', active:true, app_name:'mBank', android_package:'com.example.mbank', ios_app_id:'1234567890',
+      ios_deep_link:'', android_deep_link:'', desktop_url:'', fallback_url:'https://example.com', pass_params:true, try_app_first:true, tags:['bio'], created_at:new Date(now-86400e3*60).toISOString() },
+    { id:'d3', slug:'cardless', title:'Cardless ATM withdrawal', active:false, app_name:'mBank', android_package:'com.example.mbank', ios_app_id:'1234567890',
+      ios_deep_link:'mbank://cardless', android_deep_link:'mbank://cardless', desktop_url:'https://example.com/cardless', pass_params:true, try_app_first:true, tags:[], created_at:new Date(now-86400e3*5).toISOString() },
+  ];
+  const seed = (s) => { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return () => ((h = Math.imul(h ^ (h >>> 15), 2246822507) ^ Math.imul(h ^ (h >>> 13), 3266489909)) >>> 0) / 4294967296; };
+  const weight = { d1: 120, d2: 45, d3: 8 };
+  function stats(id, days) {
+    const r = seed(id + days), base = weight[id] ?? 10, by_day = []; let total = 0;
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(now - i * 86400e3); const wk = [0.8,1,1,1.05,1.1,1.3,1.2][d.getDay()];
+      const n = Math.max(0, Math.round(base * wk * (0.55 + r() * 0.9) * (id === 'd1' ? 0.4 + (days - i) / days : 1)));
+      by_day.push({ day: d.toISOString().slice(0, 10), n }); total += n;
+    }
+    const split = (pairs) => { const out = []; let left = total; pairs.forEach(([k, w], i) => { const n = i === pairs.length - 1 ? left : Math.round(total * w); left -= n; out.push({ k, n: Math.max(0, n) }); }); return out.sort((a,b)=>b.n-a.n); };
+    const plat = split([['android',.68],['ios',.21],['desktop',.11]]);
+    return { total, unique: Math.round(total * .82), bots: Math.round(total * .07),
+      by_day, platform: Object.fromEntries(plat.map(x => [x.k, x.n])),
+      outcome: { app: Math.round(total * .62), store: Math.round(total * .27), landing: Math.round(total * .11) },
+      country: split([['NP',.86],['IN',.05],['AE',.03],['QA',.025],['US',.015],['AU',.02]]),
+      referrer: split([['facebook.com',.46],['direct',.24],['instagram.com',.14],['tiktok.com',.09],['viber.com',.07]]),
+      source: split([['facebook',.44],['(none)',.27],['instagram',.15],['sms',.14]]) };
+  }
+  return {
+    async user() { return { email: 'demo@dynalink.local' }; },
+    async signOut() {},
+    async list() { return links.slice().sort((a,b)=>b.created_at.localeCompare(a.created_at)); },
+    async overview(days) { return Object.fromEntries(links.map(l => [l.id, { clicks: stats(l.id, days).total }])); },
+    async save(l) {
+      const row = clean(l);
+      if (!/^[A-Za-z0-9_-]{2,64}$/.test(row.slug || '')) throw new Error('Short path must be 2–64 letters, numbers, - or _');
+      if (links.some(x => x.slug === row.slug && x.id !== l.id)) throw new Error('That short path is already taken');
+      if (l.id) { const i = links.findIndex(x => x.id === l.id); links[i] = { ...links[i], ...row }; return links[i]; }
+      const n = { ...row, id: 'n' + Date.now(), created_at: new Date().toISOString() }; links.push(n); return n;
+    },
+    async remove(id) { links = links.filter(l => l.id !== id); },
+    async stats(id, days) { return stats(id, days); },
+  };
+}
+
+const api = DEMO ? demoApi() : supabaseApi();
+
+/* ───────────── ROUTING PREVIEW (mirrors the edge function) ───────────── */
+function routes(l) {
+  const iosStore = l.ios_store_url || (l.ios_app_id ? `https://apps.apple.com/app/id${l.ios_app_id}` : '');
+  const andStore = l.android_store_url || (l.android_package ? `https://play.google.com/store/apps/details?id=${l.android_package}` : '');
+  const c = (s) => `<code>${esc(s)}</code>`;
+  const mobile = (deep, store) => {
+    if (deep && l.try_app_first) return `Open app ${c(deep)} → if not installed: ${store ? c(store) : (l.fallback_url ? c(l.fallback_url) : 'stays on page')}`;
+    if (store) return `App store ${c(store)}`;
+    if (l.fallback_url) return `Web ${c(l.fallback_url)}`;
+    return '<span style="color:var(--bad)">No destination set</span>';
+  };
+  return [
+    ['iPhone', mobile(l.ios_deep_link, iosStore)],
+    ['Android', mobile(l.android_deep_link, andStore) + (andStore && andStore.includes('play.google') ? ' <span class="tag">+ install referrer</span>' : '')],
+    ['Desktop', l.desktop_url ? `Redirect ${c(l.desktop_url)}` : 'Auto landing page with QR code + store buttons'],
+    ['Previews', l.og_title || l.title ? `Social card: “${esc(l.og_title || l.title)}”` : 'Social card uses the slug'],
+  ];
+}
+const routeHtml = (l) => `<div class="route">${routes(l).map(([p, d]) => `<div class="p">${p}</div><div class="d">${d}</div>`).join('')}</div>`;
+
+/* ───────────── STATE ───────────── */
+let LINKS = [], OVER = {}, SEL = null, DAYS = 30;
+
+async function loadAll(keepSel = true) {
+  [LINKS, OVER] = await Promise.all([api.list(), api.overview(30)]);
+  if (!keepSel || !LINKS.find(l => l.id === SEL)) SEL = window.innerWidth > 900 ? (LINKS[0]?.id ?? null) : null;
+  renderList(); renderDetail();
+}
+
+function renderList() {
+  const q = $('q').value.toLowerCase();
+  const rows = LINKS.filter(l => !q || [l.title, l.slug, ...(l.tags||[])].join(' ').toLowerCase().includes(q));
+  $('items').innerHTML = rows.length ? rows.map(l => `
+    <div class="item ${l.id === SEL ? 'sel' : ''}" data-id="${esc(l.id)}">
+      <div class="t"><span class="dot ${l.active ? '' : 'off'}"></span>${esc(l.title || l.slug)}</div>
+      <div class="n">${fmt(OVER[l.id]?.clicks)}</div>
+      <div class="s">/${esc(l.slug)}</div>
+      <div class="nl">clicks · 30d</div>
+    </div>`).join('') : `<div class="empty">${LINKS.length ? 'No matches.' : 'No links yet.<br><br><button class="btn primary" onclick="document.getElementById(\'newBtn\').click()">Create your first link</button>'}</div>`;
+  $('appView').classList.toggle('has-sel', !!SEL);
+}
+
+$('items').addEventListener('click', (e) => { const it = e.target.closest('.item'); if (!it) return; SEL = it.dataset.id; renderList(); renderDetail(); window.scrollTo(0, 0); });
+$('q').addEventListener('input', renderList);
+
+/* ───────────── DETAIL ───────────── */
+async function renderDetail() {
+  const l = LINKS.find(x => x.id === SEL);
+  const D = $('detail');
+  if (!l) { D.innerHTML = `<div class="empty">Select a link to see its analytics.</div>`; return; }
+  const url = shortUrl(l);
+  D.innerHTML = `
+    <div class="dhead">
+      <button class="btn sm back" id="backBtn">← Links</button>
+      <div style="flex:1;min-width:220px">
+        <h2>${esc(l.title || l.slug)}</h2>
+        <div class="shortrow">
+          <span class="shorturl">${esc(url)}</span>
+          <button class="btn sm" data-copy="${esc(url)}">Copy</button>
+          <a class="btn sm" href="${esc(url)}" target="_blank" rel="noopener">Open</a>
+          ${l.active ? '<span class="tag" style="background:var(--ok-soft);color:var(--ok)">Active</span>' : '<span class="tag">Paused</span>'}
+          ${(l.tags||[]).map(t => `<span class="tag">${esc(t)}</span>`).join('')}
+        </div>
+      </div>
+      <div class="seg" id="range">${[7,30,90].map(d => `<button data-d="${d}" class="${d===DAYS?'on':''}">${d}d</button>`).join('')}</div>
+      <button class="btn" id="editBtn">Edit</button>
+    </div>
+    <div class="grid" id="stats"><div class="card c12"><div class="nodata">Loading analytics…</div></div></div>
+    <div class="grid" style="margin-top:14px">
+      <div class="card c8"><h3>Where each visitor goes</h3>${routeHtml(l)}</div>
+      <div class="card c4"><h3>QR code</h3>
+        <div class="qrwrap"><div class="qr" id="qr"></div>
+          <div style="display:flex;flex-direction:column;gap:8px"><button class="btn sm" id="qrPng">Download PNG</button><button class="btn sm" id="qrSvg">Download SVG</button></div>
+        </div></div>
+      <div class="card c12"><h3>Campaign link builder (UTM)</h3>
+        <div class="row2" style="grid-template-columns:repeat(3,1fr)">
+          <div class="field"><label>Source</label><input class="inp" id="uS" placeholder="facebook"></div>
+          <div class="field"><label>Medium</label><input class="inp" id="uM" placeholder="social"></div>
+          <div class="field"><label>Campaign</label><input class="inp" id="uC" placeholder="dashain-2083"></div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center"><div class="out" id="uOut" style="flex:1">${esc(url)}</div><button class="btn sm" id="uCopy">Copy</button></div>
+        <div class="field" style="margin:8px 0 0"><span class="h">Each source shows up separately under “Top sources”. ${l.pass_params ? 'Parameters are also forwarded into the app deep link and Play Store install referrer.' : ''}</span></div>
+      </div>
+    </div>`;
+
+  D.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => copy(b.dataset.copy));
+  $('backBtn').onclick = () => { SEL = null; renderList(); };
+  $('editBtn').onclick = () => openEditor(l);
+  $('range').onclick = (e) => { const d = +e.target.dataset.d; if (d) { DAYS = d; renderDetail(); } };
+
+  // QR
+  const qr = qrcode(0, 'M'); qr.addData(url); qr.make();
+  const svg = qr.createSvgTag({ cellSize: 8, margin: 2, scalable: true });
+  $('qr').innerHTML = svg;
+  const dl = (href, name) => { const a = document.createElement('a'); a.href = href; a.download = name; a.click(); };
+  $('qrSvg').onclick = () => dl(URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' })), `${l.slug}-qr.svg`);
+  $('qrPng').onclick = () => {
+    const img = new Image(); img.onload = () => { const c = document.createElement('canvas'); c.width = c.height = 1024; const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0,0,1024,1024); x.drawImage(img, 0, 0, 1024, 1024); dl(c.toDataURL('image/png'), `${l.slug}-qr.png`); };
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg.replace('<svg ', '<svg width="1024" height="1024" '));
+  };
+
+  // UTM
+  const upd = () => { const p = new URLSearchParams(); [['utm_source','uS'],['utm_medium','uM'],['utm_campaign','uC']].forEach(([k, id]) => { const v = $(id).value.trim(); if (v) p.set(k, v); }); $('uOut').textContent = url + (p.toString() ? '?' + p : ''); };
+  ['uS','uM','uC'].forEach(id => $(id).oninput = upd);
+  $('uCopy').onclick = () => copy($('uOut').textContent);
+
+  // stats
+  const myId = l.id, myDays = DAYS;
+  let s; try { s = await api.stats(l.id, DAYS); } catch (e) { $('stats').innerHTML = `<div class="card c12 err">${esc(e.message)}</div>`; return; }
+  if (SEL !== myId || DAYS !== myDays) return;
+  renderStats(s);
+}
+
+function barsHtml(list, labeler = (k) => k) {
+  if (!list || !list.length || !list.some(x => x.n)) return '<div class="nodata">No clicks in this period.</div>';
+  const max = Math.max(...list.map(x => x.n)), tot = list.reduce((a, x) => a + x.n, 0);
+  return `<div class="bars">${list.map(x => `<div class="bar" title="${esc(labeler(x.k))}: ${fmt(x.n)} (${Math.round(x.n / tot * 100)}%)"><span class="k">${esc(labeler(x.k))}</span><div class="track"><div class="fill" style="width:${(x.n / max * 100).toFixed(1)}%"></div></div><span class="n">${fmt(x.n)}</span></div>`).join('')}</div>`;
+}
+const FLAG = (cc) => cc && cc.length === 2 && cc !== '??' ? String.fromCodePoint(...[...cc.toUpperCase()].map(c => 127397 + c.charCodeAt(0))) + ' ' + cc : 'Unknown';
+const PLAT = { android: 'Android', ios: 'iPhone / iPad', desktop: 'Desktop' };
+const OUT = { app: 'Tried app', store: 'Sent to store', landing: 'Landing page', desktop: 'Desktop URL', fallback: 'Web fallback' };
+const objList = (o) => Object.entries(o || {}).map(([k, n]) => ({ k, n })).sort((a, b) => b.n - a.n);
+
+function renderStats(s) {
+  const plat = objList(s.platform), out = objList(s.outcome);
+  const appPct = s.total ? Math.round((s.outcome?.app || 0) / s.total * 100) : 0;
+  const mob = s.total ? Math.round(((s.platform?.android || 0) + (s.platform?.ios || 0)) / s.total * 100) : 0;
+  $('stats').innerHTML = `
+    <div class="card c3 kpi"><div class="v">${fmt(s.total)}</div><div class="l">Clicks · last ${DAYS} days</div></div>
+    <div class="card c3 kpi"><div class="v">${fmt(s.unique)}</div><div class="l">Unique visitors</div></div>
+    <div class="card c3 kpi"><div class="v">${mob}%</div><div class="l">From phones</div></div>
+    <div class="card c3 kpi"><div class="v">${appPct}%</div><div class="l">Sent into the app · ${fmt(s.bots)} bots filtered</div></div>
+    <div class="card c12"><h3>Clicks per day</h3><div class="chart" id="daily"></div></div>
+    <div class="card c4"><h3>Devices</h3>${barsHtml(plat, k => PLAT[k] || k)}</div>
+    <div class="card c4"><h3>Outcome</h3>${barsHtml(out, k => OUT[k] || k)}</div>
+    <div class="card c4"><h3>Top countries</h3>${barsHtml(s.country, FLAG)}</div>
+    <div class="card c6"><h3>Top referrers</h3>${barsHtml(s.referrer)}</div>
+    <div class="card c6"><h3>Top sources (utm_source)</h3>${barsHtml(s.source)}</div>`;
+  dailyChart($('daily'), fillDays(s.by_day || [], DAYS));
+}
+
+function fillDays(rows, days) {
+  const m = Object.fromEntries(rows.map(r => [String(r.day).slice(0, 10), r.n])), out = [];
+  for (let i = days - 1; i >= 0; i--) { const d = new Date(Date.now() - i * 86400e3).toISOString().slice(0, 10); out.push({ day: d, n: m[d] || 0 }); }
+  return out;
+}
+
+function dailyChart(el, data) {
+  const W = Math.max(300, el.clientWidth || 900), H = W < 600 ? 170 : 200, L = 36, B = 22, T = 8;
+  const max = Math.max(4, ...data.map(d => d.n));
+  const nice = (() => { const p = Math.pow(10, Math.floor(Math.log10(max))); const m = max / p; return (m <= 2 ? 2 : m <= 5 ? 5 : 10) * p; })();
+  const bw = (W - L) / data.length, gap = Math.min(4, bw * 0.25), y = (v) => T + (H - T - B) * (1 - v / nice);
+  const ticks = [0, nice / 2, nice];
+  const fmtDay = (d) => new Date(d + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const every = Math.ceil(data.length / Math.max(3, Math.floor(W / 100)));
+  let g = ticks.map(t => `<line x1="${L}" x2="${W}" y1="${y(t)}" y2="${y(t)}" stroke="#eef0f4"/><text x="${L - 8}" y="${y(t) + 4}" text-anchor="end" font-size="11" fill="#6b7385">${fmt(t)}</text>`).join('');
+  data.forEach((d, i) => {
+    const x = L + i * bw + gap / 2, w = Math.max(1, bw - gap), h = (H - T - B) - (y(d.n) - T), r = Math.min(4, w / 2, h);
+    if (d.n > 0) g += `<path d="M${x},${H - B} v${-(h - r)} q0,${-r} ${r},${-r} h${w - 2 * r} q${r},0 ${r},${r} v${h - r} z" fill="#2f5bea"/>`;
+    g += `<rect class="hit" data-i="${i}" x="${L + i * bw}" y="${T}" width="${bw}" height="${H - T - B}" fill="transparent"/>`;
+    if (i % every === 0) g += `<text x="${x + w / 2}" y="${H - 6}" text-anchor="middle" font-size="11" fill="#6b7385">${fmtDay(d.day)}</text>`;
+  });
+  g += `<line x1="${L}" x2="${W}" y1="${H - B}" y2="${H - B}" stroke="#d5d9e1"/>`;
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Clicks per day">${g}</svg><div class="tip"></div>`;
+  const tip = el.querySelector('.tip'), svg = el.querySelector('svg');
+  const show = (e) => {
+    const r = e.target.closest('.hit'); if (!r) { tip.style.opacity = 0; return; }
+    const d = data[+r.dataset.i], box = svg.getBoundingClientRect(), sc = box.width / W;
+    tip.innerHTML = `<b>${fmt(d.n)}</b> clicks · ${fmtDay(d.day)}`;
+    tip.style.left = ((L + (+r.dataset.i + .5) * bw) * sc) + 'px'; tip.style.top = (y(d.n) * sc) + 'px'; tip.style.opacity = 1;
+  };
+  svg.addEventListener('pointermove', show); svg.addEventListener('pointerdown', show);
+  svg.addEventListener('pointerleave', () => tip.style.opacity = 0);
+}
+
+/* ───────────── EDITOR ───────────── */
+const FORM = [
+  ['Basics', [
+    ['title', 'Title', 'Shown in your dashboard', 'Dashain ticket offer'],
+    ['slug', 'Short path', '', 'dashain', 'slug'],
+    ['tags', 'Tags', 'Comma separated', 'campaign, facebook'],
+  ]],
+  ['Your app', [
+    ['app_name', 'App name', '', 'mBank'],
+    ['app_icon_url', 'App icon URL', 'Square PNG, shown on the landing & open pages', 'https://…/icon.png'],
+    ['android_package', 'Android package name', 'Builds the Play Store link + opens the app via intent://', 'com.yourbrand.app', null, true],
+    ['ios_app_id', 'iOS App Store ID', 'The number in apps.apple.com/app/id…', '1234567890', null, true],
+  ]],
+  ['Where people go', [
+    ['ios_deep_link', 'iOS deep link', 'Opens this screen if the app is installed', 'yourapp://offers/dashain', null, true],
+    ['android_deep_link', 'Android deep link', '', 'yourapp://offers/dashain', null, true],
+    ['ios_store_url', 'App Store URL', 'Optional — overrides the App Store ID', 'https://apps.apple.com/…', null, true],
+    ['android_store_url', 'Play Store URL', 'Optional — overrides the package name', 'https://play.google.com/…', null, true],
+    ['desktop_url', 'Desktop URL', 'Leave empty to show the auto landing page with a QR code', 'https://yourbrand.com/offer'],
+    ['fallback_url', 'Web fallback', 'Used when there is no store link (e.g. a web version)', 'https://yourbrand.com'],
+  ]],
+  ['Social preview', [
+    ['og_title', 'Preview title', 'What Facebook / WhatsApp / Viber show', ''],
+    ['og_description', 'Preview description', '', '', 'textarea'],
+    ['og_image', 'Preview image URL', '1200×630 recommended', 'https://…/card.jpg'],
+  ]],
+];
+const CHECKS = [
+  ['active', 'Active', 'Paused links show a “link not found” page'],
+  ['try_app_first', 'Open the app if installed', 'Otherwise go straight to the store'],
+  ['pass_params', 'Forward URL parameters', 'utm_* and any ?key=value go into the deep link, store referrer and web URLs'],
+];
+let EDIT = null;
+
+function openEditor(l) {
+  EDIT = l ? { ...l } : { active: true, try_app_first: true, pass_params: true, slug: randomSlug(), tags: [] };
+  $('mTitle').textContent = l ? 'Edit link' : 'New link';
+  $('mDel').hidden = !l; $('mErr').textContent = '';
+  const val = (k) => k === 'tags' ? (EDIT.tags || []).join(', ') : (EDIT[k] ?? '');
+  let h = '';
+  for (const [name, fields] of FORM) {
+    h += `<fieldset><legend>${name}</legend>`;
+    let pair = [];
+    const flush = () => { if (pair.length) { h += `<div class="row2">${pair.join('')}</div>`; pair = []; } };
+    for (const [k, label, hint, ph, kind, half] of fields) {
+      const input = kind === 'textarea'
+        ? `<textarea class="inp" name="${k}" placeholder="${esc(ph)}">${esc(val(k))}</textarea>`
+        : kind === 'slug'
+          ? `<div style="display:flex;gap:6px;align-items:center"><span style="color:var(--muted);font-family:var(--mono);font-size:12px;white-space:nowrap">${esc(SHORT.replace(/^https?:\/\//, ''))}/</span><input class="inp" name="slug" value="${esc(val(k))}" placeholder="${esc(ph)}"><button type="button" class="btn sm" id="rnd">↻</button></div>`
+          : `<input class="inp" name="${k}" value="${esc(val(k))}" placeholder="${esc(ph)}">`;
+      const f = `<div class="field"><label>${label}</label>${input}${hint ? `<span class="h">${hint}</span>` : ''}</div>`;
+      if (half) { pair.push(f); if (pair.length === 2) flush(); } else { flush(); h += f; }
+    }
+    flush();
+    if (name === 'Where people go') {
+      h += CHECKS.map(([k, label, hint]) => `<label class="chk"><input type="checkbox" name="${k}" ${EDIT[k] ? 'checked' : ''}><span>${label}<small>${hint}</small></span></label>`).join('');
+      const ex = EDIT.expires_at ? new Date(EDIT.expires_at).toISOString().slice(0, 16) : '';
+      h += `<div class="field"><label>Expires</label><input class="inp" type="datetime-local" name="expires_at" value="${ex}"><span class="h">Optional</span></div>`;
+    }
+    h += `</fieldset>`;
+  }
+  h += `<fieldset><legend>Routing preview</legend><div id="prev" style="padding-bottom:12px"></div></fieldset>`;
+  $('form').innerHTML = h;
+  $('rnd').onclick = () => { $('form').elements.slug.value = randomSlug(); $('form').dispatchEvent(new Event('input')); };
+  const sync = () => { readForm(); $('prev').innerHTML = routeHtml(EDIT); };
+  $('form').oninput = sync; $('form').onchange = sync; sync();
+  $('modal').hidden = false;
+}
+
+function readForm() {
+  const f = $('form').elements;   // .elements avoids clashes like form.title
+  for (const [, fields] of FORM) for (const [k] of fields) EDIT[k] = f[k].value;
+  EDIT.tags = String(EDIT.tags || '').split(',').map(s => s.trim()).filter(Boolean);
+  for (const [k] of CHECKS) EDIT[k] = f[k].checked;
+  EDIT.expires_at = f.expires_at.value ? new Date(f.expires_at.value).toISOString() : null;
+}
+
+$('newBtn').onclick = () => openEditor(null);
+$('mClose').onclick = () => $('modal').hidden = true;
+$('modal').onclick = (e) => { if (e.target.id === 'modal') $('modal').hidden = true; };
+$('mSave').onclick = async () => {
+  readForm(); $('mErr').textContent = '';
+  if (!EDIT.slug) EDIT.slug = randomSlug();
+  if (!/^[A-Za-z0-9_-]{2,64}$/.test(EDIT.slug)) { $('mErr').textContent = 'Short path: 2–64 letters, numbers, - or _'; return; }
+  $('mSave').disabled = true;
+  try { const saved = await api.save(EDIT); SEL = saved.id; $('modal').hidden = true; await loadAll(); toast('Saved'); }
+  catch (e) { $('mErr').textContent = /duplicate|unique/i.test(e.message) ? 'That short path is already taken' : e.message; }
+  finally { $('mSave').disabled = false; }
+};
+$('mDel').onclick = async () => {
+  if (!EDIT?.id || !confirm(`Delete /${EDIT.slug}? Its analytics will be deleted too.`)) return;
+  await api.remove(EDIT.id); $('modal').hidden = true; SEL = null; await loadAll(false); toast('Deleted');
+};
+
+/* ───────────── AUTH / BOOT ───────────── */
+async function boot() {
+  $('demoBadge').hidden = !DEMO;
+  const u = await api.user();
+  if (!u) { $('authView').hidden = false; $('appView').hidden = true; $('signOut').hidden = true; $('who').textContent = ''; return; }
+  $('authView').hidden = true; $('appView').hidden = false;
+  $('who').textContent = u.email || ''; $('signOut').hidden = DEMO;
+  await loadAll();
+}
+const authAct = (fn) => async () => {
+  $('aErr').textContent = '';
+  try { await fn($('aEmail').value.trim(), $('aPass').value); await boot(); }
+  catch (e) { $('aErr').textContent = e.message; }
+};
+if (!DEMO) {
+  $('aIn').onclick = authAct((e, p) => api.signIn(e, p));
+  $('aUp').onclick = authAct(async (e, p) => { await api.signUp(e, p); toast('Account created — check your email if confirmation is on'); });
+  $('signOut').onclick = async () => { await api.signOut(); boot(); };
+}
+boot().catch(e => { document.body.insertAdjacentHTML('beforeend', `<div class="empty err">${esc(e.message)}</div>`); });
+})();
+</script>
+</body>
+</html>

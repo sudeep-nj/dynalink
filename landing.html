@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Get the app</title>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<style>
+  :root{--bg:#f6f7f9;--card:#fff;--ink:#14171f;--muted:#5d6475;--line:#e4e7ee;--accent:#2f5bea}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--ink);
+       font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:32px}
+  .wrap{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center;background:var(--card);
+        border:1px solid var(--line);border-radius:24px;padding:48px;max-width:860px;width:100%}
+  .icon{width:84px;height:84px;border-radius:20px;object-fit:cover;background:var(--line)}
+  h1{font-size:30px;line-height:1.15;margin:18px 0 8px;letter-spacing:-.01em}
+  .desc{color:var(--muted);margin:0 0 26px}
+  .stores{display:flex;gap:10px;flex-wrap:wrap}
+  .stores a{display:inline-flex;align-items:center;gap:8px;padding:11px 16px;border-radius:12px;background:var(--ink);
+            color:#fff;text-decoration:none;font-weight:600;font-size:14px}
+  .stores a.alt{background:transparent;color:var(--ink);border:1px solid var(--line)}
+  .qrbox{text-align:center}
+  .qr{background:#fff;border:1px solid var(--line);border-radius:18px;padding:16px;width:240px;margin:0 auto}
+  .qr svg{width:100%;height:auto;display:block}
+  .hint{color:var(--muted);font-size:13px;margin-top:12px}
+  .short{font-family:ui-monospace,Menlo,monospace;font-size:13px;color:var(--accent);word-break:break-all}
+  .center{text-align:center;max-width:420px}
+  @media (max-width:720px){.wrap{grid-template-columns:1fr;padding:28px;gap:28px}}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main class="wrap" id="main">
+  <section>
+    <img id="icon" class="icon" alt="" hidden>
+    <h1 id="title">Get the app</h1>
+    <p class="desc" id="desc">Scan the code with your phone camera to open it on your device.</p>
+    <div class="stores">
+      <a id="ios" hidden> App Store</a>
+      <a id="android" hidden>▶ Google Play</a>
+      <a id="web" class="alt" hidden>Continue on web</a>
+    </div>
+  </section>
+  <section class="qrbox">
+    <div class="qr" id="qr"></div>
+    <div class="hint">Point your phone camera here</div>
+    <div class="short" id="short"></div>
+  </section>
+</main>
+<main class="wrap center" id="missing" hidden>
+  <section style="grid-column:1/-1">
+    <h1>Link not found</h1>
+    <p class="desc">This link doesn’t exist, has expired, or was turned off.</p>
+  </section>
+</main>
+<script>
+(function () {
+  function decode(h) {
+    try {
+      h = h.replace(/^#/, "").replace(/-/g, "+").replace(/_/g, "/");
+      while (h.length % 4) h += "=";
+      var bin = atob(h), bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return JSON.parse(new TextDecoder().decode(bytes));
+    } catch (e) { return null; }
+  }
+  var $ = function (id) { return document.getElementById(id); };
+  var d = decode(location.hash);
+  if (!d || d.missing) { $("main").hidden = true; $("missing").hidden = false; return; }
+
+  if (d.icon) { $("icon").src = d.icon; $("icon").hidden = false; }
+  var title = d.title || d.app || "Get the app";
+  $("title").textContent = title; document.title = title;
+  if (d.desc) $("desc").textContent = d.desc;
+  if (d.ios) { $("ios").href = d.ios; $("ios").hidden = false; }
+  if (d.android) { $("android").href = d.android; $("android").hidden = false; }
+  if (d.fallback) { $("web").href = d.fallback; $("web").hidden = false; }
+
+  var target = d.short || location.href;
+  $("short").textContent = target.replace(/^https?:\/\//, "");
+  var qr = qrcode(0, "M"); qr.addData(target); qr.make();
+  $("qr").innerHTML = qr.createSvgTag({ cellSize: 6, margin: 0, scalable: true });
+})();
+</script>
+</body>
+</html>

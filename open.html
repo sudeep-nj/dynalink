@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Opening…</title>
+<style>
+  :root{--bg:#f6f7f9;--card:#fff;--ink:#14171f;--muted:#5d6475;--line:#e4e7ee;--accent:#2f5bea}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--ink);
+       font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:24px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:32px 24px;max-width:360px;width:100%;text-align:center}
+  .icon{width:72px;height:72px;border-radius:18px;object-fit:cover;background:var(--line);margin:0 auto 14px;display:block}
+  h1{font-size:20px;margin:0 0 4px}
+  p{color:var(--muted);margin:0 0 22px;font-size:14px}
+  .spin{width:22px;height:22px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;
+        animation:s .8s linear infinite;margin:0 auto 22px}
+  @keyframes s{to{transform:rotate(360deg)}}
+  a.btn{display:block;padding:14px;border-radius:12px;text-decoration:none;font-weight:600;margin-top:10px}
+  .primary{background:var(--accent);color:#fff}
+  .ghost{background:transparent;color:var(--accent);border:1px solid var(--line)}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main class="card">
+  <img id="icon" class="icon" alt="" hidden>
+  <h1 id="title">Opening the app…</h1>
+  <p id="sub">If nothing happens, use the buttons below.</p>
+  <div class="spin" id="spin"></div>
+  <a class="btn primary" id="openBtn" href="#">Open in app</a>
+  <a class="btn ghost" id="storeBtn" href="#">Get the app</a>
+  <a class="btn ghost" id="webBtn" href="#" hidden>Continue on web</a>
+</main>
+<script>
+(function () {
+  function decode(h) {
+    try {
+      h = h.replace(/^#/, "").replace(/-/g, "+").replace(/_/g, "/");
+      while (h.length % 4) h += "=";
+      var bin = atob(h), bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return JSON.parse(new TextDecoder().decode(bytes));
+    } catch (e) { return null; }
+  }
+  var d = decode(location.hash);
+  if (!d) { document.getElementById("title").textContent = "Invalid link"; document.getElementById("spin").hidden = true; return; }
+
+  var $ = function (id) { return document.getElementById(id); };
+  if (d.icon) { $("icon").src = d.icon; $("icon").hidden = false; }
+  if (d.app) $("title").textContent = "Opening " + d.app + "…";
+  document.title = d.title || d.app || "Opening…";
+
+  var ua = navigator.userAgent;
+  var inApp = /FBAN|FBAV|Instagram|Line\/|TikTok|musical_ly|Twitter/i.test(ua);
+  var store = d.store || d.fallback;
+  var appUrl = d.deep;
+
+  // Android Chrome: intent:// opens the app, or Chrome itself falls back to the Play Store.
+  if (d.p === "android" && d.pkg && d.deep && !inApp) {
+    var m = d.deep.match(/^([a-zA-Z][\w+.-]*):\/\/(.*)$/);
+    if (m) {
+      appUrl = "intent://" + m[2] + "#Intent;scheme=" + m[1] + ";package=" + d.pkg +
+        (store ? ";S.browser_fallback_url=" + encodeURIComponent(store) : "") + ";end";
+    }
+  }
+
+  $("openBtn").href = appUrl;
+  if (store) $("storeBtn").href = store; else $("storeBtn").hidden = true;
+  if (d.fallback && d.fallback !== store) { $("webBtn").href = d.fallback; $("webBtn").hidden = false; }
+
+  // Try the app; if the page is still visible after the timeout, the app isn't installed → store.
+  var left = false;
+  document.addEventListener("visibilitychange", function () { if (document.hidden) left = true; });
+  window.addEventListener("pagehide", function () { left = true; });
+
+  setTimeout(function () { location.href = appUrl; }, 50);
+  setTimeout(function () {
+    $("spin").hidden = true;
+    if (!left && store && !appUrl.startsWith("intent://")) location.replace(store);
+  }, 1600);
+})();
+</script>
+</body>
+</html>
